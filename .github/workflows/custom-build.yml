@@ -428,7 +428,10 @@ jobs:
         with:
           prefix-key: macos-full
 
-      - name: Setup vcpkg
+      - name: Install nasm (needed before vcpkg for aom)
+        run: brew install nasm
+
+      - name: Setup vcpkg (installs libyuv, libvpx, aom for scrap)
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: /tmp/vcpkg
@@ -437,7 +440,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          brew install opus nasm
+          brew install opus
 
       - name: Build rustdesk (macOS)
         run: |
