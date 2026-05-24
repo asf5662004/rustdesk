@@ -79,7 +79,16 @@ jobs:
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
         run: |
-          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          for i in 1 2 3; do
+            $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed" && break
+            if [ $i -lt 3 ]; then
+              echo "vcpkg install failed (attempt $i), retrying in 30s..."
+              sleep 30
+            else
+              echo "vcpkg install failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       - name: Build rustdesk
         run: |
@@ -167,7 +176,16 @@ jobs:
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
         run: |
-          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          for i in 1 2 3; do
+            $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed" && break
+            if [ $i -lt 3 ]; then
+              echo "vcpkg install failed (attempt $i), retrying in 30s..."
+              sleep 30
+            else
+              echo "vcpkg install failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       - name: Build rustdesk (x86, server-only — no Flutter GUI for 32-bit)
         run: |
@@ -228,7 +246,16 @@ jobs:
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
         run: |
-          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          for i in 1 2 3; do
+            $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed" && break
+            if [ $i -lt 3 ]; then
+              echo "vcpkg install failed (attempt $i), retrying in 30s..."
+              sleep 30
+            else
+              echo "vcpkg install failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -285,7 +312,16 @@ jobs:
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
         run: |
-          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          for i in 1 2 3; do
+            $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed" && break
+            if [ $i -lt 3 ]; then
+              echo "vcpkg install failed (attempt $i), retrying in 30s..."
+              sleep 30
+            else
+              echo "vcpkg install failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       - uses: Swatinem/rust-cache@v2
         with:
