@@ -565,15 +565,16 @@ jobs:
         run: |
           brew install opus
           # vcpkg installs opus but misses multistream headers;
-          # link Homebrew's opus headers to vcpkg's include directory
-          VCPKG_OPUS_INC=$(ls -d /tmp/vcpkg/installed/arm64-osx/include/opus 2>/dev/null)
-          BREW_OPUS_PREFIX=$(brew --prefix opus 2>/dev/null)
-          if [ -n "$VCPKG_OPUS_INC" ] && [ -n "$BREW_OPUS_PREFIX" ]; then
-            # Copy any missing headers from Homebrew opus into vcpkg's opus include dir
-            for header in "$BREW_OPUS_PREFIX/include/opus/"*.h; do
-              base=$(basename "$header")
-              [ ! -f "$VCPKG_OPUS_INC/$base" ] && cp "$header" "$VCPKG_OPUS_INC/$base"
-            done
+          # copy Homebrew's opus headers to vcpkg's include directory
+          VCPKG_OPUS_DIR="/tmp/vcpkg/installed/arm64-osx/include/opus"
+          if [ -d "$VCPKG_OPUS_DIR" ]; then
+            BREW_OPUS_PREFIX=$(brew --prefix opus 2>/dev/null) || true
+            if [ -n "$BREW_OPUS_PREFIX" ]; then
+              for header in "$BREW_OPUS_PREFIX/include/opus/"*.h; do
+                base=$(basename "$header")
+                [ ! -f "$VCPKG_OPUS_DIR/$base" ] && cp "$header" "$VCPKG_OPUS_DIR/$base"
+              done
+            fi
           fi
 
       - name: Build rustdesk (macOS)
