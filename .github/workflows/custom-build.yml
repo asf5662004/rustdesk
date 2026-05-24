@@ -437,7 +437,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          brew install opus
+          brew install opus nasm
 
       - name: Build rustdesk (macOS)
         run: |
