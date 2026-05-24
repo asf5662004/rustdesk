@@ -370,6 +370,13 @@ jobs:
             x86_64-linux-android)   echo "ANDROID_TARGET=x86_64"     >> $GITHUB_ENV ;;
           esac
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /tmp/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          runVcpkgInstall: false
+
       - name: Build native libs
         run: |
           ./flutter/build_android_deps.sh "${ANDROID_TARGET}"
@@ -419,7 +426,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          brew install opus
+          brew install opus libyuv
 
       - name: Build rustdesk (macOS)
         run: |
