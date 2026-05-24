@@ -169,10 +169,11 @@ jobs:
         run: |
           $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
 
-      - name: Build rustdesk (x86)
+      - name: Build rustdesk (x86, server-only — no Flutter GUI for 32-bit)
         run: |
-          python3 build.py --portable --flutter --skip-portable-pack --arch x86
-          mv ./flutter/build/windows/x86/runner/Release ./rustdesk
+          cargo build --release --features flutter --target i686-pc-windows-msvc
+          mkdir -p ./rustdesk
+          cp ./target/i686-pc-windows-msvc/release/rustdesk.exe ./rustdesk/
 
       - name: Build portable
         shell: bash
@@ -370,6 +371,9 @@ jobs:
             x86_64-linux-android)   echo "ANDROID_TARGET=x86_64"     >> $GITHUB_ENV ;;
           esac
 
+      - name: Install nasm (vcpkg dependency for aom)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -424,9 +428,16 @@ jobs:
         with:
           prefix-key: macos-full
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /tmp/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          runVcpkgInstall: true
+
       - name: Install system dependencies
         run: |
-          brew install opus libyuv
+          brew install opus
 
       - name: Build rustdesk (macOS)
         run: |
