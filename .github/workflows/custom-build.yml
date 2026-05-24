@@ -554,12 +554,26 @@ jobs:
       - name: Install nasm (needed before vcpkg for aom)
         run: brew install nasm
 
-      - name: Setup vcpkg (installs libyuv, libvpx, aom for scrap)
+      - name: Setup vcpkg (clone + bootstrap only)
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: /tmp/vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
-          runVcpkgInstall: true
+          runVcpkgInstall: false
+
+      - name: Install vcpkg dependencies (with retry)
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            $VCPKG_ROOT/vcpkg install && break
+            if [ $i -lt 3 ]; then
+              echo "vcpkg install failed (attempt $i), retrying in 30s..."
+              sleep 30
+            else
+              echo "vcpkg install failed after 3 attempts"
+              exit 1
+            fi
+          done
 
       - name: Install system dependencies
         run: |

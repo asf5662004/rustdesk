@@ -53,7 +53,7 @@ impl Session {
 
 #[async_trait]
 impl Interface for Session {
-    fn get_login_config_handler(&self) -> Arc<RwLock<LoginConfigHandler>> {
+    fn get_lch(&self) -> Arc<RwLock<LoginConfigHandler>> {
         return self.lc.clone();
     }
 
@@ -126,6 +126,10 @@ impl Interface for Session {
 
     fn send(&self, data: Data) {
         self.sender.send(data).ok();
+    }
+
+    fn set_multiple_windows_session(&self, _sessions: Vec<WindowsSession>) {
+        // CLI mode: no window management needed
     }
 }
 
