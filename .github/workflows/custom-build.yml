@@ -75,6 +75,7 @@ jobs:
           doNotCache: false
 
       - name: Install vcpkg dependencies
+        shell: bash
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
         run: |
@@ -162,6 +163,7 @@ jobs:
           doNotCache: false
 
       - name: Install vcpkg dependencies (x86)
+        shell: bash
         env:
           VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
         run: |
@@ -213,6 +215,20 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        shell: bash
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: windows-x64-lite
@@ -255,6 +271,20 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: i686-pc-windows-msvc
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies (x86)
+        shell: bash
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -321,14 +351,16 @@ jobs:
           crate: cargo-ndk
           version: ${{ env.CARGO_NDK_VERSION }}
 
-      - name: Install NDK
+      - name: Setup NDK
         run: |
-          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.NDK_VERSION }}" --sdk_root=${ANDROID_SDK_ROOT}
-          echo "NDK_SIDE=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
-
-      - name: Set ANDROID_NDK_HOME
-        run: |
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+          # Use NDK pre-installed on the runner, or find latest
+          NDK_DIR=$(ls -d ${ANDROID_SDK_ROOT}/ndk/* 2>/dev/null | sort -V | tail -1)
+          if [ -z "$NDK_DIR" ]; then
+            echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973" --sdk_root=${ANDROID_SDK_ROOT}
+            NDK_DIR="${ANDROID_SDK_ROOT}/ndk/27.0.12077973"
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "Using NDK: $NDK_DIR"
 
       - name: Map target
         run: |
@@ -384,6 +416,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: macos-full
+
+      - name: Install system dependencies
+        run: |
+          brew install opus
 
       - name: Build rustdesk (macOS)
         run: |
