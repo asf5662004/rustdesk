@@ -564,17 +564,16 @@ jobs:
       - name: Install system dependencies
         run: |
           brew install opus
-          # vcpkg installs opus but misses multistream headers;
-          # copy Homebrew's opus headers to vcpkg's include directory
-          VCPKG_OPUS_DIR="/tmp/vcpkg/installed/arm64-osx/include/opus"
-          if [ -d "$VCPKG_OPUS_DIR" ]; then
-            BREW_OPUS_PREFIX=$(brew --prefix opus 2>/dev/null) || true
-            if [ -n "$BREW_OPUS_PREFIX" ]; then
-              for header in "$BREW_OPUS_PREFIX/include/opus/"*.h; do
-                base=$(basename "$header")
-                [ ! -f "$VCPKG_OPUS_DIR/$base" ] && cp "$header" "$VCPKG_OPUS_DIR/$base"
-              done
-            fi
+          # magnum-opus build.rs looks for opus headers at
+          # $VCPKG_ROOT/installed/arm64-osx/include/opus/ but vcpkg's
+          # opus port may not install all headers (e.g. opus_multistream.h).
+          # Symlink Homebrew's complete opus headers into vcpkg's include path.
+          VCPKG_INCLUDE_DIR="/tmp/vcpkg/installed/arm64-osx/include"
+          mkdir -p "$VCPKG_INCLUDE_DIR"
+          BREW_OPUS_PREFIX=$(brew --prefix opus)
+          if [ -d "$BREW_OPUS_PREFIX/include/opus" ]; then
+            rm -rf "$VCPKG_INCLUDE_DIR/opus"
+            ln -sfn "$BREW_OPUS_PREFIX/include/opus" "$VCPKG_INCLUDE_DIR/opus"
           fi
 
       - name: Build rustdesk (macOS)
