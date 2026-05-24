@@ -14,7 +14,7 @@ env:
   ANDROID_FLUTTER_VERSION: "3.24.5"
   VERSION: "1.0.0"
   CARGO_NDK_VERSION: "3.1.2"
-  NDK_VERSION: "r28c"
+  NDK_VERSION: "r27d"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   LLVM_VERSION: "15.0.6"
   APP_NAME: "吉丝云远程"
@@ -217,20 +217,7 @@ jobs:
         with:
           prefix-key: windows-x64-lite
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: C:\vcpkg
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
-          doNotCache: false
-
-      - name: Install vcpkg dependencies
-        env:
-          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
-        run: |
-          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
-
-      - name: Build server-only (cli feature)
+      - name: Build server-only (cli feature, x64)
         run: |
           cargo build --release --features cli
 
@@ -272,19 +259,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: windows-x86-lite
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: C:\vcpkg
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
-          doNotCache: false
-
-      - name: Install vcpkg dependencies (x86)
-        env:
-          VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
-        run: |
-          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
 
       - name: Build server-only (cli feature, x86)
         run: |
@@ -413,7 +387,7 @@ jobs:
 
       - name: Build rustdesk (macOS)
         run: |
-          python3 build.py --flutter --release
+          python3 build.py --flutter
 
       - name: Create DMG
         run: |
