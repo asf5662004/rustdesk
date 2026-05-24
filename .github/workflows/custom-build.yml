@@ -1,0 +1,453 @@
+name: 吉丝云远程 自定义构建
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  RUST_VERSION: "1.75"
+  MAC_RUST_VERSION: "1.81"
+  FLUTTER_VERSION: "3.24.5"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  VERSION: "1.0.0"
+  CARGO_NDK_VERSION: "3.1.2"
+  NDK_VERSION: "r28c"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  LLVM_VERSION: "15.0.6"
+  APP_NAME: "吉丝云远程"
+  MANUFACTURER: "雁行科技"
+
+jobs:
+  # ── Windows x64 全功能版 (A) ──
+  build-windows-x64-full:
+    name: Windows x64 Full
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: ${{ env.LLVM_VERSION }}
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2.12.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Replace engine with rustdesk custom flutter engine
+        run: |
+          flutter doctor -v
+          flutter precache --windows
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
+          mv -Force windows-x64-release/* C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+
+      - name: Patch flutter
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: windows-x64-full
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: Build rustdesk
+        run: |
+          python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack
+          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+
+      - name: Find Runner.res
+        continue-on-error: true
+        shell: bash
+        run: |
+          runner_res=$(find . -name "Runner.res");
+          if [ "$runner_res" != "" ]; then
+            cp $runner_res ./libs/portable/Runner.res;
+          fi
+
+      - name: Build self-extracted executable
+        shell: bash
+        run: |
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          popd
+          mkdir -p ./SignOutput
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x64-full.exe
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build msi
+        run: |
+          pushd ./res/msi
+          python preprocess.py --arp -d ../../rustdesk --app-name "${{ env.APP_NAME }}" --manufacturer "${{ env.MANUFACTURER }}"
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          mv ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x64.msi
+          popd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-full
+          path: SignOutput/
+
+  # ── Windows x86 全功能版 (B) ──
+  build-windows-x86-full:
+    name: Windows x86 Full
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: ${{ env.LLVM_VERSION }}
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2.12.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install Rust toolchain (i686)
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: i686-pc-windows-msvc
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: windows-x86-full
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies (x86)
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: Build rustdesk (x86)
+        run: |
+          python3 build.py --portable --flutter --skip-portable-pack --arch x86
+          mv ./flutter/build/windows/x86/runner/Release ./rustdesk
+
+      - name: Build portable
+        shell: bash
+        run: |
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          popd
+          mkdir -p ./SignOutput
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x86-full.exe
+
+      - name: Build msi (x86)
+        run: |
+          pushd ./res/msi
+          python preprocess.py --arp -d ../../rustdesk --app-name "${{ env.APP_NAME }}" --manufacturer "${{ env.MANUFACTURER }}"
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x86 /p:TargetVersion=Windows10
+          mv ./Package/bin/x86/Release/en-us/Package.msi ../../SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x86.msi
+          popd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86-full
+          path: SignOutput/
+
+  # ── Windows x64 精简版 (C) — Server-Only Portable ──
+  build-windows-x64-lite:
+    name: Windows x64 Lite (Server-Only)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: windows-x64-lite
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: Build server-only (cli feature)
+        run: |
+          cargo build --release --features cli
+
+      - name: Build portable single exe
+        shell: bash
+        run: |
+          mkdir -p ./rustdesk
+          cp ./target/release/rustdesk.exe ./rustdesk/
+          # Minimal packaging: just the server binary
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          popd
+          mkdir -p ./SignOutput
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x64-lite.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-lite
+          path: SignOutput/
+
+  # ── Windows x86 精简版 (D) — Server-Only Portable ──
+  build-windows-x86-lite:
+    name: Windows x86 Lite (Server-Only)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain (i686)
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: i686-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: windows-x86-lite
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies (x86)
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x86-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x86-windows-static --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: Build server-only (cli feature, x86)
+        run: |
+          cargo build --release --features cli --target i686-pc-windows-msvc
+
+      - name: Build portable single exe
+        shell: bash
+        run: |
+          mkdir -p ./rustdesk
+          cp ./target/i686-pc-windows-msvc/release/rustdesk.exe ./rustdesk/
+          sed -i '/dpiAware/d' res/manifest.xml
+          pushd ./libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          popd
+          mkdir -p ./SignOutput
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-x86-lite.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86-lite
+          path: SignOutput/
+
+  # ── Android 精简版 (E) — Service-Only UI ──
+  build-android-lite:
+    name: Android Lite (Service-Only)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: aarch64-linux-android, arch: arm64-v8a,    reltype: release }
+          - { target: armv7-linux-androideabi, arch: armeabi-v7a, reltype: release }
+          - { target: x86_64-linux-android,    arch: x86_64,      reltype: release }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2.12.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.job.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: android-lite-${{ matrix.job.target }}
+
+      - name: Install cargo-ndk
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-ndk
+          version: ${{ env.CARGO_NDK_VERSION }}
+
+      - name: Install NDK
+        run: |
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.NDK_VERSION }}" --sdk_root=${ANDROID_SDK_ROOT}
+          echo "NDK_SIDE=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Set ANDROID_NDK_HOME
+        run: |
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
+
+      - name: Map target
+        run: |
+          case "${{ matrix.job.target }}" in
+            aarch64-linux-android)  echo "ANDROID_TARGET=arm64-v8a"  >> $GITHUB_ENV ;;
+            armv7-linux-androideabi) echo "ANDROID_TARGET=armeabi-v7a" >> $GITHUB_ENV ;;
+            x86_64-linux-android)   echo "ANDROID_TARGET=x86_64"     >> $GITHUB_ENV ;;
+          esac
+
+      - name: Build native libs
+        run: |
+          ./flutter/build_android_deps.sh "${ANDROID_TARGET}"
+          cargo ndk --target ${{ matrix.job.target }} --platform 21 -- build --release
+
+      - name: Copy native lib
+        run: |
+          mkdir -p ./flutter/android/app/src/main/jniLibs/${{ matrix.job.arch }}
+          cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/${{ matrix.job.arch }}/librustdesk.so
+
+      - name: Build Flutter APK (Lite)
+        run: |
+          pushd flutter
+          flutter build apk --release --target-platform android-${{ env.ANDROID_TARGET }} --split-per-abi --dart-define=ANDROID_LITE=true
+          mv build/app/outputs/flutter-apk/app-${{ matrix.job.arch }}-release.apk ../${{ env.APP_NAME }}-${{ env.VERSION }}-android-${{ matrix.job.arch }}-lite.apk
+          popd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lite-${{ matrix.job.arch }}
+          path: ${{ env.APP_NAME }}-${{ env.VERSION }}-android-*.apk
+
+  # ── macOS 全功能版 (F) ──
+  build-macos-full:
+    name: macOS Full
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2.12.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.MAC_RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: macos-full
+
+      - name: Build rustdesk (macOS)
+        run: |
+          python3 build.py --flutter --release
+
+      - name: Create DMG
+        run: |
+          mkdir -p ./SignOutput
+          hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder "./flutter/build/macos/Build/Products/Release/RustDesk.app" -ov -format UDZO "./SignOutput/${{ env.APP_NAME }}-${{ env.VERSION }}-macos.dmg"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-full
+          path: SignOutput/
+
+  # ── 发布 Release ──
+  publish-release:
+    needs:
+      - build-windows-x64-full
+      - build-windows-x86-full
+      - build-windows-x64-lite
+      - build-windows-x86-lite
+      - build-android-lite
+      - build-macos-full
+    if: github.ref_type == 'tag' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: List artifacts
+        run: find artifacts/ -type f
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**/*
