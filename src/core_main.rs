@@ -197,6 +197,13 @@ pub fn core_main() -> Option<Vec<String>> {
             crate::platform::try_remove_temp_update_files();
             hbb_common::config::PeerConfig::preload_peers();
         }
+        #[cfg(feature = "cli")]
+        {
+            // Server-only 模式：直接启动服务，不启动 Flutter UI
+            log::info!("Starting server-only mode");
+            crate::start_server(true, false);
+            return None;
+        }
         std::thread::spawn(move || crate::start_server(false, no_server));
     } else {
         #[cfg(any(target_os = "linux", target_os = "macos"))]

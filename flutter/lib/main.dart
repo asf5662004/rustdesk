@@ -509,7 +509,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               ? const DesktopTabPage()
               : isWeb
                   ? WebHomePage()
-                  : HomePage(),
+                  : isAndroid && const String.fromEnvironment('ANDROID_LITE') == 'true'
+                      ? const LiteHomePage()
+                      : HomePage(),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

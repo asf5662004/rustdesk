@@ -3,9 +3,11 @@ import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 import '../../common.dart';
 import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
+import '../../models/server_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
 
@@ -245,11 +247,60 @@ class WebHomePage extends StatelessWidget {
       }
     }
     if (id != null) {
-      connect(context, id, 
-        isFileTransfer: isFileTransfer, 
-        isViewCamera: isViewCamera, 
+      connect(context, id,
+        isFileTransfer: isFileTransfer,
+        isViewCamera: isViewCamera,
         isTerminal: isTerminal,
         password: password);
     }
+  }
+}
+
+/// Android 精简版首页 — 仅服务开关、ID 显示、连接管理
+class LiteHomePage extends StatefulWidget {
+  const LiteHomePage({Key? key}) : super(key: key);
+
+  @override
+  State<LiteHomePage> createState() => _LiteHomePageState();
+}
+
+class _LiteHomePageState extends State<LiteHomePage> {
+  @override
+  void initState() {
+    super.initState();
+    gFFI.serverModel.checkAndroidPermission();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    stateGlobal.isInMainPage = true;
+    return Scaffold(
+      appBar: AppBar(
+        centerTitle: true,
+        title: Text(bind.mainGetAppNameSync()),
+      ),
+      body: ChangeNotifierProvider.value(
+        value: gFFI.serverModel,
+        child: Consumer<ServerModel>(
+          builder: (context, serverModel, child) => SingleChildScrollView(
+            controller: gFFI.serverModel.controller,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  buildPresetPasswordWarningMobile(),
+                  gFFI.serverModel.isStart
+                      ? ServerInfo()
+                      : ServiceNotRunningNotification(),
+                  const ConnectionManager(),
+                  const PermissionChecker(),
+                  SizedBox.fromSize(size: const Size(0, 15.0)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
